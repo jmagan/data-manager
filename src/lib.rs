@@ -120,7 +120,7 @@ struct DataChunkMetadata {
     size: usize,
 }
 
-const MAX_STORAGE_SIZE: usize = 1 * 1024 * 1024 * 1024;
+const MAX_STORAGE_SIZE: usize = 1000 * 1024 * 1024 * 1024;
 const ESTIMATED_CHUNK_SIZE: usize = 200 * 1024 * 1024;
 
 #[derive(Debug, Clone)]

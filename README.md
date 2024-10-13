@@ -89,7 +89,7 @@ This will run the tests and print the results to the console.
 
 ## Demo
 
-The main function simulate random download and deletion operations. Each operation is printed to the console, showing the current state of the data manager. The mock data generate a data chunk with 4 files of 50 MB each. The data manager has a storage limit  of 1 TB, and it will stop downloading data when the limit is reached.
+The main function simulate random download and deletion operations. Each operation is printed to the console, showing the current state of the data manager. The mock data generate a data chunk with 4 files of 50 MB each. The data manager has a storage limit  of 1 GB (only 5 data chunks), and it will stop downloading data when the limit is reached.
 
 This emojis are used to represent the state of the data chunks:
 
