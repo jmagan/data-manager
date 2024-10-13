@@ -95,14 +95,14 @@ This emojis are used to represent the state of the data chunks:
 
 > <center>
 > 📡 - Starting a download. <br>
-> 💾 - File downloade. <br>
-> ✅ - Fully downloaded data chun. <br>
-> ❌ - Data chunk delete. <br>
+> 💾 - File downloaded. <br>
+> ✅ - Fully downloaded data chunk. <br>
+> ❌ - Data chunk deleted. <br>
 > 🚫 - Storage exceeded. <br>
-> ⌛️ - Waiting for references to dro. <br>
-> 📏 - Current state storage siz. <br>
-> ⛓️‍💥 - Dummy reference droppe. <br>
-> 🛑 - Shutdow. <br>
+> ⌛️ - Waiting for references to drop. <br>
+> 📏 - Current state storage size. <br>
+> ⛓️‍💥 - Dummy reference dropped. <br>
+> 🛑 - Shutdown. <br>
 > </center>
 
 <br>
@@ -110,4 +110,5 @@ This emojis are used to represent the state of the data chunks:
 This video shows how the data manager works asynchronusly and handles multiple operations at the same time. The data manager is able to download and delete data chunks while keeping track of the storage size and references to the data chunks. The video also shows the graceful shutdown procedure, where the data manager waits for all tasks to finish before closing.
 
 <br>
-<video src="./doc/demo.mov">
+
+https://github.com/user-attachments/assets/3e7a9f46-e51a-4630-9906-e60974197ec5
