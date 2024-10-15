@@ -58,10 +58,13 @@ async fn main() {
         }
 
         if rng.gen_bool(0.5) {
-            if !data_chunks.is_empty() {
-                let random_chunk_id = data_chunks.keys().collect::<Vec<&ChunkId>>()
-                    [rng.gen_range(0..data_chunks.len())];
-                let random_chunk = data_chunks.get(random_chunk_id).unwrap().clone();
+            let chunk_ids = data_manager.list_chunks();
+            if !chunk_ids.is_empty() {
+                let random_chunk_id = chunk_ids[rng.gen_range(0..chunk_ids.len())];
+                let random_chunk = match data_chunks.get(&random_chunk_id) {
+                    Some(chunk) => chunk.clone(),
+                    None => continue,
+                };
 
                 if rng.gen_bool(0.7) {
                     let data_manager = data_manager.clone();
