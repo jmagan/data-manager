@@ -196,50 +196,48 @@ impl MyDataManager {
 
         let data_manager = self.clone();
 
-        self.task_tracker.spawn(async move {
-            let mut metadata = DataChunkMetadata {
-                chunk: chunk.clone(),
-                size: 0,
-            };
+        let mut metadata = DataChunkMetadata {
+            chunk: chunk.clone(),
+            size: 0,
+        };
 
-            for task in tasks {
-                match task.await {
-                    Ok(Ok(size)) => metadata.size += size,
-                    _ => {
-                        log::error!("❌ Error downloading chunk {:} Retrying...", chunk);
-                        data_manager.download_chunk(chunk.clone());
-                        return;
-                    }
+        for task in tasks {
+            match task.await {
+                Ok(Ok(size)) => metadata.size += size,
+                _ => {
+                    log::error!("❌ Error downloading chunk {:} Retrying...", chunk);
+                    data_manager.download_chunk(chunk.clone());
+                    return;
                 }
             }
+        }
 
-            *data_manager.storage_size.write().await += metadata.size;
+        *data_manager.storage_size.write().await += metadata.size;
 
-            fs::write(
-                data_manager
-                    .data_dir
-                    .join(hex::encode(chunk.id))
-                    .join("metadata"),
-                serde_json::to_string(&metadata).unwrap(),
-            )
-            .unwrap();
-
-            let chunk_ref = ArcDataChunkRef::new(chunk.clone(), data_manager.data_dir);
+        fs::write(
             data_manager
-                .chunks
-                .lock()
-                .unwrap()
-                .insert(chunk.id, chunk_ref);
+                .data_dir
+                .join(hex::encode(chunk.id))
+                .join("metadata"),
+            serde_json::to_string(&metadata).unwrap(),
+        )
+        .unwrap();
 
-            // Decrease current downloads by one
-            *data_manager.current_downloads.write().await -= 1;
+        let chunk_ref = ArcDataChunkRef::new(chunk.clone(), data_manager.data_dir);
+        data_manager
+            .chunks
+            .lock()
+            .unwrap()
+            .insert(chunk.id, chunk_ref);
 
-            log::info!("✅ Downloaded chunk {:}", chunk);
-            log::info!(
-                "📏 current storage size: {:.2} MB",
-                *(data_manager.storage_size.read().await) / (1024 * 1024)
-            );
-        });
+        // Decrease current downloads by one
+        *data_manager.current_downloads.write().await -= 1;
+
+        log::info!("✅ Downloaded chunk {:}", chunk);
+        log::info!(
+            "📏 current storage size: {:.2} MB",
+            *(data_manager.storage_size.read().await) / (1024 * 1024)
+        );
     }
 
     /// Delete chunk task
@@ -299,9 +297,14 @@ impl MyDataManager {
         deleters_rx: &mut mpsc::UnboundedReceiver<ChunkId>,
         shutdown_rx: &mut mpsc::UnboundedReceiver<()>,
     ) {
+        let data_manager = self.clone();
         tokio::select! {
-            Some(chunk) = downloaders_rx.recv() => self.download_chunk_task(chunk).await,
-            Some(chunk_id) = deleters_rx.recv() => self.delete_chunk_task(chunk_id).await,
+            Some(chunk) = downloaders_rx.recv() => {
+                self.task_tracker.spawn(async move { data_manager.download_chunk_task(chunk).await; });
+            },
+            Some(chunk_id) = deleters_rx.recv() => {
+                self.task_tracker.spawn(async move { data_manager.delete_chunk_task(chunk_id).await; });
+            },
             _ = shutdown_rx.recv() => {
                 log::info!("🔌 Shutting down data manager");
                 downloaders_rx.close();
