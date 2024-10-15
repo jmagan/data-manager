@@ -137,10 +137,20 @@ pub struct MyDataManager {
 }
 
 impl MyDataManager {
+    /// Shutdown the data manager
+    /// This method will send a shutdown signal to the data manager.
     pub fn shutdown(&self) {
         self.shutdown.send(()).unwrap();
     }
 
+    /// Download chunk task
+    /// This task is responsible for downloading a chunk from the data manager.
+    /// It will check if the storage size is exceeded, and if it is, it will return.
+    /// It will then download the files in the chunk and save the metadata to the metadata file.
+    /// Finally, it will insert the chunk into the data manager and decrease the current downloads by one.
+    ///
+    /// The download process is done in parallel for each file in the chunk.
+    /// If any file fails to download, the chunk will be retried.
     async fn download_chunk_task(&self, chunk: DataChunk) {
         log::info!("📡 Downloading chunk {:}", chunk);
 
@@ -161,6 +171,7 @@ impl MyDataManager {
 
         let mut tasks = vec![];
 
+        // Download each file in the chunk
         for (file_name, url) in chunk.files.iter() {
             let file_name = file_name.clone();
             let url = url.clone();
@@ -169,6 +180,7 @@ impl MyDataManager {
 
             fs::create_dir_all(data_dir.clone().join(&hex_id)).unwrap();
 
+            // Spawn a new non-blocking task for each file download
             let task = tokio::task::spawn_blocking(move || {
                 let handle = Handle::current();
 
@@ -201,6 +213,7 @@ impl MyDataManager {
             size: 0,
         };
 
+        // Wait for all tasks to finish
         for task in tasks {
             match task.await {
                 Ok(Ok(size)) => metadata.size += size,
@@ -223,6 +236,7 @@ impl MyDataManager {
         )
         .unwrap();
 
+        // Insert chunk into data manager
         let chunk_ref = ArcDataChunkRef::new(chunk.clone(), data_manager.data_dir);
         data_manager
             .chunks
@@ -291,6 +305,10 @@ impl MyDataManager {
         }
     }
 
+    /// Worker
+    /// This method is responsible for handling the downloaders, deleters, and shutdown signals.
+    /// It will spawn a new task for each download and delete operation.
+    /// It will also handle the shutdown signal and close the downloaders and deleters channels.
     async fn worker(
         &self,
         downloaders_rx: &mut mpsc::UnboundedReceiver<DataChunk>,
@@ -313,6 +331,8 @@ impl MyDataManager {
         }
     }
 
+    /// Stopped
+    /// This method will return true if the data manager is stopped.
     pub async fn stopped(&self) -> bool {
         let state = self.state.read().await;
         *state == DataManagerState::Stopped
@@ -324,6 +344,7 @@ impl DataManager for MyDataManager {
         let mut initial_chunks = HashMap::new();
         let mut initial_storage_size: usize = 0;
 
+        // Check if data directory exists and check if lock file exists
         if (data_dir.join("lock")).exists() {
             panic!("🔒 Data directory is already in use. If any process is using it, please stop it and remove the lock file.");
         } else {
@@ -352,6 +373,10 @@ impl DataManager for MyDataManager {
             initial_storage_size += metadata.size;
         }
 
+        // Create channels
+        // downloaders: channel for downloading chunks
+        // deleters: channel for deleting chunks
+        // shutdown: channel for shutting down the data manager
         let (downloaders, mut downloaders_rx) = mpsc::unbounded_channel();
         let (deleters, mut deleters_rx) = mpsc::unbounded_channel();
         let (shutdown, mut shutdown_rx) = mpsc::unbounded_channel();
@@ -370,6 +395,7 @@ impl DataManager for MyDataManager {
 
         let dm_clone = dm.clone();
 
+        // Handle shutdown signal
         tokio::spawn(async move {
             signal::ctrl_c().await.unwrap();
             log::info!(" 🛑  Stopping gracefully");
@@ -380,10 +406,14 @@ impl DataManager for MyDataManager {
 
         let dm_clone = dm.clone();
 
+        // Worker task
+        // This task is responsible for handling the downloaders, deleters, and shutdown signals.
         tokio::spawn(async move {
             loop {
                 {
                     let mut state = dm_clone.state.write().await;
+
+                    // Check if the data manager is shutting down
                     if *state == DataManagerState::ShuttingDown
                         && deleters_rx.is_empty()
                         && downloaders_rx.is_empty()
@@ -401,6 +431,7 @@ impl DataManager for MyDataManager {
                     }
                 }
 
+                // Handle downloaders, deleters, and shutdown signals
                 dm_clone
                     .worker(&mut downloaders_rx, &mut deleters_rx, &mut shutdown_rx)
                     .await;
@@ -410,6 +441,8 @@ impl DataManager for MyDataManager {
         dm
     }
 
+    /// Download chunk
+    /// This method will send the chunk to the downloaders channel.
     fn download_chunk(&self, chunk: DataChunk) {
         match self.downloaders.send(chunk) {
             Ok(_) => (),
@@ -417,10 +450,15 @@ impl DataManager for MyDataManager {
         }
     }
 
+    /// List chunks
+    /// This method will return a list of all the chunks in the data manager.
     fn list_chunks(&self) -> Vec<ChunkId> {
         self.chunks.lock().unwrap().keys().cloned().collect()
     }
 
+    //// Find chunk
+    /// This method will find a chunk from a given dataset and block number.
+    /// It will return the chunk if it exists, otherwise it will return None.
     fn find_chunk(&self, dataset_id: [u8; 32], block_number: u64) -> Option<impl DataChunkRef> {
         let chunks = self.chunks.lock().unwrap();
         let chunk = chunks.values().find(|chunk| {
@@ -435,6 +473,9 @@ impl DataManager for MyDataManager {
         }
     }
 
+    /// Delete chunk
+    /// This method will send the chunk id to the deleters channel.
+    /// The chunk will be deleted if it is not in use.
     fn delete_chunk(&self, chunk_id: [u8; 32]) {
         match self.deleters.send(chunk_id) {
             Ok(_) => (),
